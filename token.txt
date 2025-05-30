@@ -1,0 +1,4 @@
+TOKEN = '7879596687:AAF_0ckeFXnX5Wgs0j93oGp0suXwgr5BTZQ'
+CHAT_ID = '932734805' 
+al[ha_key = 'KH09FUMTCWJPK0YI']
+polygon_key = 'dNTu7WmL18WNnTWh5pNtznspjULHHpbW'
