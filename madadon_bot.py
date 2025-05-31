@@ -10,8 +10,14 @@ from telegram import Bot, Update
 from telegram.ext import Application, CommandHandler, ContextTypes, ApplicationBuilder
 
 # === CONFIG ===
-BOT_TOKEN = '7879596687:AAF_0ckeFXnX5Wgs0j93oGp0suXwgr5BTZQ'
-CHAT_ID = "932734805"
+# Multiple chat IDs for notifications
+from config import CHAT_ID, BOT_TOKEN, BARANOV_CHAT_ID
+
+CHAT_IDS = [
+    CHAT_ID,        # Your original chat ID
+    BARANOV_CHAT_ID,      # Add second user's chat ID here
+    # "CHAT_ID_3",      # Add third user's chat ID here
+]
 
 # Enhanced ETF list with more variety
 SYMBOLS = {
@@ -93,6 +99,48 @@ class StateManager:
     def mark_notification_sent(self):
         self.state["last_notification"] = datetime.now().strftime("%Y-%m-%d")
         self.save_state()
+    
+    def add_user(self, chat_id: str, username: str = "Unknown"):
+        """Add a new user to receive notifications"""
+        if "users" not in self.state:
+            self.state["users"] = {}
+        self.state["users"][chat_id] = {
+            "username": username,
+            "added_date": datetime.now().isoformat(),
+            "active": True
+        }
+        self.save_state()
+    
+    def get_active_users(self) -> List[str]:
+        """Get list of active user chat IDs"""
+        users = self.state.get("users", {})
+        active_users = [chat_id for chat_id, info in users.items() if info.get("active", True)]
+        # Include original CHAT_IDS for backward compatibility
+        return list(set(CHAT_IDS + active_users))
+    
+    def remove_user(self, chat_id: str):
+        """Deactivate a user from receiving notifications"""
+        if "users" in self.state and chat_id in self.state["users"]:
+            self.state["users"][chat_id]["active"] = False
+            self.save_state()
+
+async def send_to_all_users(bot: Bot, message: str, parse_mode: str = 'Markdown'):
+    """Send message to all active users"""
+    active_users = state_manager.get_active_users()
+    sent_count = 0
+    failed_count = 0
+    
+    for chat_id in active_users:
+        try:
+            await bot.send_message(chat_id=chat_id, text=message, parse_mode=parse_mode)
+            sent_count += 1
+            logger.info(f"Message sent successfully to {chat_id}")
+        except Exception as e:
+            failed_count += 1
+            logger.error(f"Failed to send message to {chat_id}: {e}")
+    
+    logger.info(f"Message delivery: {sent_count} successful, {failed_count} failed")
+    return sent_count, failed_count
 
 state_manager = StateManager()
 
@@ -338,12 +386,148 @@ async def alerts_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error in alerts command: {e}")
         await update.message.reply_text("❌ Failed to check alerts.")
 
+async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Subscribe user to notifications"""
+    chat_id = str(update.effective_chat.id)
+    username = update.effective_user.username or update.effective_user.first_name or "Unknown"
+    
+    state_manager.add_user(chat_id, username)
+    
+    await update.message.reply_text(
+        f"✅ *Subscribed Successfully!*\n\n"
+        f"👤 User: @{username}\n"
+        f"🆔 Chat ID: {chat_id}\n\n"
+        f"You will now receive:\n"
+        f"• 📅 Daily market reports at 9:00 AM\n"
+        f"• 🚨 Real-time alerts for significant changes\n"
+        f"• 📊 Historical low notifications\n\n"
+        f"Use /unsubscribe to stop notifications",
+        parse_mode='Markdown'
+    )
+
+async def unsubscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Unsubscribe user from notifications"""
+    chat_id = str(update.effective_chat.id)
+    username = update.effective_user.username or update.effective_user.first_name or "Unknown"
+    
+    state_manager.remove_user(chat_id)
+    
+    await update.message.reply_text(
+        f"❌ *Unsubscribed*\n\n"
+        f"👤 User: @{username}\n"
+        f"You will no longer receive automatic notifications.\n\n"
+        f"Use /subscribe to re-enable notifications",
+        parse_mode='Markdown'
+    )
+
+async def users_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show all subscribed users (admin only)"""
+    chat_id = str(update.effective_chat.id)
+    
+    # Only allow original admin to see user list
+    if chat_id not in CHAT_IDS:
+        await update.message.reply_text("❌ Admin access required")
+        return
+    
+    active_users = state_manager.get_active_users()
+    users_info = state_manager.state.get("users", {})
+    
+    user_list = f"👥 *Subscribed Users* ({len(active_users)} total)\n\n"
+    
+    for i, user_chat_id in enumerate(active_users, 1):
+        user_info = users_info.get(user_chat_id, {})
+        username = user_info.get("username", "Unknown")
+        added_date = user_info.get("added_date", "Unknown")
+        
+        if added_date != "Unknown":
+            try:
+                date_obj = datetime.fromisoformat(added_date.replace('Z', '+00:00'))
+                added_date = date_obj.strftime("%Y-%m-%d")
+            except:
+                pass
+        
+        user_list += f"{i}. @{username}\n"
+        user_list += f"   🆔 {user_chat_id}\n"
+        user_list += f"   📅 Added: {added_date}\n\n"
+    
+    await update.message.reply_text(user_list, parse_mode='Markdown')
+
+async def test_alert_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Test sending alerts to all users"""
+    chat_id = str(update.effective_chat.id)
+    
+    # Only allow original admin to test
+    if chat_id not in CHAT_IDS:
+        await update.message.reply_text("❌ Admin access required")
+        return
+    
+    await update.message.reply_text("🧪 Sending test alert to all subscribed users...")
+    
+    test_message = f"""
+🧪 *TEST ALERT - ETF Market Bot*
+
+📅 Test Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+This is a test message to verify that notifications are working correctly.
+
+✅ If you received this message, you're successfully subscribed to:
+• Daily market reports (9:00 AM)
+• Real-time price alerts
+• Historical low notifications
+
+🤖 Bot Status: Operational
+📊 Monitoring: {len(SYMBOLS)} ETFs
+    """
+    
+    bot = context.bot
+    sent_count, failed_count = await send_to_all_users(bot, test_message)
+    
+    result_msg = f"📊 *Test Results*\n\n"
+    result_msg += f"✅ Successfully sent: {sent_count}\n"
+    result_msg += f"❌ Failed to send: {failed_count}\n"
+    result_msg += f"👥 Total subscribers: {len(state_manager.get_active_users())}"
+    
+    await update.message.reply_text(result_msg, parse_mode='Markdown')
+
+async def test_9am_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Test the 9 AM daily report"""
+    chat_id = str(update.effective_chat.id)
+    
+    # Only allow original admin to test
+    if chat_id not in CHAT_IDS:
+        await update.message.reply_text("❌ Admin access required")
+        return
+    
+    await update.message.reply_text("🧪 Generating and sending test 9 AM report to all users...")
+    
+    try:
+        # Generate the daily report
+        report = await build_report(detailed=False)
+        test_report = f"🧪 *TEST - Daily Market Report*\n\n{report}\n\n_This was a test of the 9 AM daily alert system_"
+        
+        # Send to all users
+        bot = context.bot
+        sent_count, failed_count = await send_to_all_users(bot, test_report)
+        
+        result_msg = f"📊 *9 AM Test Results*\n\n"
+        result_msg += f"✅ Report sent to: {sent_count} users\n"
+        result_msg += f"❌ Failed deliveries: {failed_count}\n"
+        result_msg += f"👥 Total subscribers: {len(state_manager.get_active_users())}"
+        
+        await update.message.reply_text(result_msg, parse_mode='Markdown')
+        
+    except Exception as e:
+        logger.error(f"Error in 9 AM test: {e}")
+        await update.message.reply_text(f"❌ Test failed: {str(e)}")
+
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    active_users = state_manager.get_active_users()
     status_msg = f"""
 📊 *Bot Status*
 
 🕐 Current Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 📈 Tracking: {len(SYMBOLS)} ETFs
+👥 Active Users: {len(active_users)}
 ⏰ Check Intervals: Every 30 minutes
 📅 Last Daily Report: {state_manager.state.get('last_notification', 'Never')}
 💾 State File: {'✅ OK' if STATE_FILE.exists() else '❌ Missing'}
@@ -401,6 +585,12 @@ async def main():
         app.add_handler(CommandHandler("detailed", detailed_command))
         app.add_handler(CommandHandler("alerts", alerts_command))
         app.add_handler(CommandHandler("status", status_command))
+        app.add_handler(CommandHandler("test", test_alert_command))
+        app.add_handler(CommandHandler("test9am", test_9am_command))
+        app.add_handler(CommandHandler("subscribe", subscribe_command))
+        app.add_handler(CommandHandler("unsubscribe", unsubscribe_command))
+        app.add_handler(CommandHandler("users", users_command))
+
         
         logger.info("Starting ETF Market Tracker Bot...")
         logger.info(f"Monitoring {len(SYMBOLS)} ETFs")

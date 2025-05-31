@@ -18,6 +18,13 @@
     "HACK": 81.83999633789062,
     "BOTZ": 30.899999618530273
   },
-  "last_notification": "",
-  "alerts": {}
+  "last_notification": "2025-05-31",
+  "alerts": {},
+  "users": {
+    "932734805": {
+      "username": "\u05d8\u05dc",
+      "added_date": "2025-05-31T10:57:15.924610",
+      "active": true
+    }
+  }
 }
