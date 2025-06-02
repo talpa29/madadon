@@ -19853,9 +19853,12 @@ task: <Task cancelling name='Application:7879596687:update_fetcher' coro=<Applic
 2025-06-02 14:59:08,534 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot7879596687:AAF_0ckeFXnX5Wgs0j93oGp0suXwgr5BTZQ/getUpdates "HTTP/1.1 200 OK"
 2025-06-02 14:59:18,598 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot7879596687:AAF_0ckeFXnX5Wgs0j93oGp0suXwgr5BTZQ/getUpdates "HTTP/1.1 200 OK"
 2025-06-02 14:59:28,681 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot7879596687:AAF_0ckeFXnX5Wgs0j93oGp0suXwgr5BTZQ/getUpdates "HTTP/1.1 200 OK"
+<<<<<<< Updated upstream
 2025-06-02 14:59:38,759 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot7879596687:AAF_0ckeFXnX5Wgs0j93oGp0suXwgr5BTZQ/getUpdates "HTTP/1.1 200 OK"
 2025-06-02 14:59:48,846 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot7879596687:AAF_0ckeFXnX5Wgs0j93oGp0suXwgr5BTZQ/getUpdates "HTTP/1.1 200 OK"
 2025-06-02 14:59:55,038 - __main__ - ERROR - Fatal error starting bot: This Application is still running!
 2025-06-02 14:59:55,041 - telegram.ext.Application - WARNING - Fetching updates got a asyncio.CancelledError. Ignoring as this task may onlybe closed via `Application.stop`.
 2025-06-02 14:59:55,312 - asyncio - ERROR - Task was destroyed but it is pending!
 task: <Task cancelling name='Application:7879596687:update_fetcher' coro=<Application._update_fetcher() running at C:\Users\Tal Partosh\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\telegram\ext\_application.py:1149> wait_for=<Future pending cb=[Task.task_wakeup()]> cb=[gather.<locals>._done_callback() at C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\asyncio\tasks.py:764]>
+=======
+>>>>>>> Stashed changes

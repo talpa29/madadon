@@ -10,3 +10,11 @@ pandas==2.2.0
 numpy==1.26.4
 pytz==2024.1
 asyncio
+logging
+datetime
+pathlib
+json
+pandas
+yfinance
+telegram
+telegram.ext

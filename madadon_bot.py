@@ -8,10 +8,10 @@ import pandas as pd
 import yfinance as yf
 from telegram import Bot, Update
 from telegram.ext import Application, CommandHandler, ContextTypes, ApplicationBuilder
-
+import requests
 # === CONFIG ===
 # Multiple chat IDs for notifications
-from config import CHAT_ID, BOT_TOKEN, BARANOV_CHAT_ID
+from config import CHAT_ID, BOT_TOKEN, BARANOV_CHAT_ID, TWELVEDATD_API_KEY
 
 CHAT_IDS = [
     CHAT_ID,        # Your original chat ID
@@ -26,7 +26,13 @@ SYMBOLS = {
     'NASDAQ 100 (QQQ)': 'QQQ',
     'Russell 2000 (IWM)': 'IWM',
     'Total Market (VTI)': 'VTI',
-    
+
+    # Israel 
+    'Tel Aviv 125': '^TA125.TA',
+    'Tel Aviv 35': 'TA35.TA',
+    'TA Banks-5': 'TA-BANKS.TA',
+
+
     # International
     'ACWI': 'ACWI',
     'Europe (IEUR)': 'IEUR',
@@ -85,9 +91,20 @@ class StateManager:
             logger.error(f"Failed to save state: {e}")
     
     def update_price(self, symbol: str, price: float):
-        self.state["last_prices"][symbol] = price
+        today = datetime.now().strftime("%Y-%m-%d")
+        if "price_history" not in self.state:
+            self.state["price_history"] = {}
+
+        if symbol not in self.state["price_history"]:
+            self.state["price_history"][symbol] = {}
+
+        self.state["price_history"][symbol][today] = price
+        self.state["last_prices"][symbol] = price  # still keep quick access
         self.save_state()
     
+    def get_price_history(self, symbol: str) -> Dict[str, float]:
+        return self.state.get("price_history", {}).get(symbol, {})
+
     def get_last_price(self, symbol: str) -> Optional[float]:
         return self.state["last_prices"].get(symbol)
     
@@ -141,6 +158,27 @@ async def send_to_all_users(bot: Bot, message: str, parse_mode: str = 'Markdown'
     
     logger.info(f"Message delivery: {sent_count} successful, {failed_count} failed")
     return sent_count, failed_count
+
+async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("Please provide a symbol. Example: `/history SPY`", parse_mode='Markdown')
+        return
+
+    symbol = context.args[0].upper()
+    history = state_manager.get_price_history(symbol)
+
+    if not history:
+        await update.message.reply_text(f"No history found for {symbol}.", parse_mode='Markdown')
+        return
+
+    # Sort by date
+    sorted_history = sorted(history.items())
+    message = f"*Price history for {symbol}:*\n"
+    for date, price in sorted_history[-10:]:  # Show last 10
+        message += f"{date}: ${price:.2f}\n"
+
+    await update.message.reply_text(message, parse_mode='Markdown')
+
 
 state_manager = StateManager()
 
@@ -549,9 +587,9 @@ async def automated_monitoring():
             # Daily report at 9:00 AM
             if current_time.hour == 9 and current_time.minute == 0:
                 if state_manager.should_send_notification():
-                    logger.info("Sending daily report...")
+                    logger.info("Sending daily report to all users...")
                     report = await build_report(detailed=False)
-                    await bot.send_message(chat_id=CHAT_ID, text=report, parse_mode='Markdown')
+                    await send_to_all_users(bot, report, parse_mode='Markdown')
                     state_manager.mark_notification_sent()
             
             # Check for significant changes every 30 minutes during market hours
@@ -564,7 +602,7 @@ async def automated_monitoring():
                         emoji = "🟢" if change_pct > 0 else "🔴"
                         alert_msg += f"{emoji} *{name}*: {change_pct:+.1f}%\n"
                     
-                    await bot.send_message(chat_id=CHAT_ID, text=alert_msg, parse_mode='Markdown')
+                    await send_to_all_users(bot, alert_msg, parse_mode='Markdown')
             
             await asyncio.sleep(60)  # Check every minute
             
@@ -590,6 +628,7 @@ async def main():
         app.add_handler(CommandHandler("subscribe", subscribe_command))
         app.add_handler(CommandHandler("unsubscribe", unsubscribe_command))
         app.add_handler(CommandHandler("users", users_command))
+        app.add_handler(CommandHandler("history", history_command))
 
         
         logger.info("Starting ETF Market Tracker Bot...")
